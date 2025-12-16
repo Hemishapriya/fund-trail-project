@@ -59,8 +59,6 @@ const closeHoldModalBtn = document.getElementById('closeHoldModal');
 const holdFilterMenu = document.getElementById('holdFilterMenu');
 
 // Hold table filter state
-let holdRowsData = [];       // currently displayed (filtered/sorted)
-let holdRowsAllData = [];    // full dataset for filters
 let holdRowsData = [];
 let holdFilters = {};
 let holdSort = { column: null, direction: null };
@@ -127,8 +125,6 @@ function closeHoldModal() {
 
 function renderHoldTable(rows) {
   if (!holdTableBody) return;
-  holdRowsAllData = rows || [];
-  holdRowsData = holdRowsAllData;
   holdRowsData = rows || [];
 
   if (!holdRowsData || holdRowsData.length === 0) {
@@ -212,8 +208,6 @@ function sortHoldRows(rows) {
 
 function applyHoldFilters() {
   if (!holdTableBody) return;
-  const source = holdRowsAllData || [];
-  const filtered = source.filter(row => {
   const filtered = holdRowsData.filter(row => {
     return Object.entries(holdFilters).every(([col, selected]) => {
       if (!selected || selected.size === 0) return true;
@@ -255,53 +249,6 @@ function showHoldFilterMenu(button) {
   const column = button.dataset.column;
   currentHoldFilterColumn = column;
 
-  const sourceRows = holdRowsAllData && holdRowsAllData.length ? holdRowsAllData : holdRowsData;
-  const rawValuesSet = new Set(sourceRows.map(row => {
-    if (column === 'layer') {
-      const rawLayer =
-        row.layer ??
-        row?.layer_no ??
-        row?.Layer ??
-        row?.layerNumber ??
-        row?.transaction_layer ??
-        row?.transactionLayer ??
-        row?.layer_number;
-      if (rawLayer === undefined || rawLayer === null || rawLayer === '') return 'N/A';
-      return String(rawLayer).trim();
-    }
-    const v = formatHoldValue(row, column);
-    return typeof v === 'string' ? v.trim() : String(v);
-  }));
-
-  // Ensure numeric layers form a full range so no numbers (e.g., 9,10) disappear
-  if (column === 'layer') {
-    const nums = [...rawValuesSet].map(v => Number(v)).filter(n => Number.isFinite(n));
-    if (nums.length) {
-      const min = Math.min(...nums);
-      const max = Math.max(...nums);
-      for (let n = min; n <= max; n++) rawValuesSet.add(String(n));
-    }
-  }
-
-  const rawValues = [...rawValuesSet];
-  const sortedValues = column === 'layer'
-    ? rawValues.slice().sort((a, b) => {
-        const na = Number(a);
-        const nb = Number(b);
-        const aNum = Number.isFinite(na);
-        const bNum = Number.isFinite(nb);
-        if (aNum && bNum) return na - nb;
-        if (aNum) return -1;
-        if (bNum) return 1;
-        return String(a).localeCompare(String(b));
-      })
-    : rawValues.slice().sort((a, b) => String(a).localeCompare(String(b)));
-  const selected = holdFilters[column] ? new Set(holdFilters[column]) : new Set(sortedValues);
-
-  const bodyHtml = sortedValues.map(val => `
-    <label>
-      <input type="checkbox" value="${String(val).replace(/"/g, '&quot;')}" ${selected.has(val) ? 'checked' : ''}>
-      <span>${String(val)}</span>
   const allValues = [...new Set(holdRowsData.map(row => formatHoldValue(row, column)))].sort();
   const selected = holdFilters[column] ? new Set(holdFilters[column]) : new Set(allValues);
 
@@ -315,7 +262,6 @@ function showHoldFilterMenu(button) {
   holdFilterMenu.innerHTML = `
     <div class="menu-header">
       <span>Filter by ${button.parentElement?.textContent?.trim() || column}</span>
-      <button aria-label="Close filter" class="hold-filter-close-btn">×</button>
       <button aria-label="Close filter" style="border:none;background:none;cursor:pointer;font-size:16px;">×</button>
     </div>
     <div class="menu-sort">
@@ -894,9 +840,6 @@ function drawTree(root) {
           html += `<strong>Put on hold Amount:</strong> ₹${d.data.hold_info.amount}<br>`;
           // Court/Refund fields styled similarly to the right-side modal; hidden until icon click
           html += `<div id="${formSectionId}" style="display:none; margin-top:12px; padding:10px 0; border-top:1px solid #e5e7eb;">`;
-          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Court Order Date:</label><input type="date" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
-          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Status of Refund:</label><select style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"><option value="refunded">Refunded</option><option value="partially_refunded">Partially Refunded</option><option value="not_refunded">Not Refunded</option></select></div>`;
-          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Amount Refund:</label><input type="number" step="0.01" placeholder="₹" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
           html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Court Order Date:</label><input id="holdCourtDate" type="date" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
           html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Status of Refund:</label><select id="holdRefundStatus" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"><option value="refunded">Refunded</option><option value="partially_refunded">Partially Refunded</option><option value="not_refunded">Not Refunded</option></select></div>`;
           html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Amount Refund:</label><input id="holdRefundAmount" type="number" step="0.01" placeholder="₹" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
@@ -1080,7 +1023,6 @@ function drawTree(root) {
         
         // Check if KYC is already saved
         let isKycSaved = d.data.kyc_name !== null && d.data.kyc_name !== "";
-        if (isKycSaved) {
         if (isKycSaved || isViewer) {
           ['kycName', 'kycAadhar', 'kycMobile', 'kycAddress'].forEach(id => {
             const el = document.getElementById(id);

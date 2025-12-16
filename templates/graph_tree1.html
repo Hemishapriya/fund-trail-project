@@ -497,10 +497,6 @@
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.18);
       width: 260px;
-      max-height: 80vh; /* fit within viewport */
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
       max-height: 320px;
       overflow: hidden;
       display: none;
@@ -513,21 +509,6 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      position: sticky;
-      top: 0;
-      background: #ffffff;
-      z-index: 2;
-      font-weight: 600;
-      color: #111827;
-    }
-    .hold-filter-close-btn {
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-size: 16px;
-      color: #111827;
-      line-height: 1;
-    }
       font-weight: 600;
       color: #111827;
     }
@@ -555,20 +536,6 @@
       background: #e2e8f0;
     }
     .hold-filter-menu .menu-body {
-      flex: 1;             /* grow to fill available space */
-      min-height: 120px;
-      overflow: auto;      /* scroll options, keep footer visible */
-      padding: 8px 12px;
-    }
-    .hold-filter-menu .menu-footer {
-      position: sticky;
-      bottom: 0;
-      background: #ffffff;
-      border-top: 1px solid #e5e7eb;
-      padding: 10px 12px;
-      display: flex;
-      gap: 8px;
-    }
       max-height: 200px;
       overflow: auto;
       padding: 8px 12px;

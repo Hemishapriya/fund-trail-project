@@ -110,6 +110,8 @@ USERS = {
     'officer': {'password': 'Officer123', 'role': 'Investigative Officer'}
 }
 
+VIEW_ONLY_ROLES = {'Viewer'}
+
 @app.route('/')
 def home():
     return redirect('/login')
@@ -118,9 +120,16 @@ def home():
 def login():
     error = None
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        role = request.form['role']
+        # Use .get() to avoid KeyError when viewer fields are disabled
+        role = request.form.get('role', '').strip()
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        # Allow viewer (read-only) login without credentials
+        if role == 'Viewer':
+            session['username'] = 'viewer'
+            session['role'] = 'Viewer'
+            return redirect('/index')
 
         user = User.query.filter_by(username=username, role=role).first()
         if user and user.check_password(password):
@@ -327,7 +336,6 @@ def view_graph():
 
 @app.route('/graph/<ack_no>')
 def graph_tree1(ack_no):
-    return render_template('graph_tree1.html', ack_no=ack_no)
     return render_template('graph_tree1.html', ack_no=ack_no, role=session.get('role'))
 
 @app.route('/complaints')
@@ -426,7 +434,6 @@ def graph_data(ack_no):
                             'atm_info': {
                                 'atm_id': t.atm_id,
                                 'amount': t.atm_withdraw_amount,
-                                'date': t.atm_withdraw_date
                                 'date': t.atm_withdraw_date,
                                 'location': t.atm_location
                             } if t.atm_id else None,
