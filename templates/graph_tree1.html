@@ -164,6 +164,30 @@
       background: #2563eb;
     }
 
+    #editKycBtn {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      width: 100%;
+      transition: background 0.2s ease;
+      margin-bottom: 8px;
+    }
+
+    #editKycBtn:hover {
+      background: #059669;
+    }
+
+    #kycForm input:disabled,
+    #kycForm textarea:disabled {
+      background-color: #f3f4f6;
+      cursor: not-allowed;
+    }
+
     #detailsPanel .detail-row {
       display: flex;
       justify-content: space-between;
@@ -439,6 +463,35 @@
       background: #0f172a;
       color: #fff;
     }
+    .hold-modal-header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .hold-modal-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hold-header-icon-btn {
+      background: #e5e7eb;
+      border: none;
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      color: #0f172a;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .hold-header-icon-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+      background: #dbeafe;
+    }
     .hold-modal-body {
       padding: 14px 18px;
       overflow: auto;
@@ -645,11 +698,14 @@
         <h3>KYC Details</h3>
         <form id="kycForm">
           <div class="detail-row"><label><b>Txn ID:</b></label><input id="kycTxnId" readonly></div>
-          <div class="detail-row"><label><b>Holder Name:</b></label><input id="kycName" required></div>
-          <div class="detail-row"><label><b>Aadhaar No:</b></label><input id="kycAadhar" required></div>
-          <div class="detail-row"><label><b>Mobile No:</b></label><input id="kycMobile" required></div>
-          <div class="detail-row"><label><b>Address:</b></label><textarea id="kycAddress" required></textarea></div>
-          <div style="margin-top: 12px;"><button type="submit" id="saveKycBtn">Save KYC</button></div>
+          <div class="detail-row"><label><b>Holder Name:</b></label><input id="kycName" required disabled></div>
+          <div class="detail-row"><label><b>Aadhaar No:</b></label><input id="kycAadhar" required disabled></div>
+          <div class="detail-row"><label><b>Mobile No:</b></label><input id="kycMobile" required disabled></div>
+          <div class="detail-row"><label><b>Address:</b></label><textarea id="kycAddress" required disabled></textarea></div>
+          <div style="margin-top: 12px;">
+            <button type="button" id="editKycBtn">Edit</button>
+            <button type="submit" id="saveKycBtn" style="display: none;">Save KYC</button>
+          </div>
         </form>
       </div>
 
@@ -678,8 +734,14 @@
     <div id="holdModalOverlay" class="hold-modal-overlay" aria-hidden="true">
       <div class="hold-modal" role="dialog" aria-modal="true" aria-labelledby="holdModalTitle">
         <div class="hold-modal-header">
-          <h3 id="holdModalTitle" style="margin:0;">Put on Hold Transactions</h3>
-          <button id="closeHoldModal" class="hold-modal-close" aria-label="Close">×</button>
+          <div class="hold-modal-header-title">
+            <h3 id="holdModalTitle" style="margin:0;">Put on Hold Transactions</h3>
+          </div>
+          <div class="hold-modal-header-actions">
+            <button id="holdLetterBtn" class="hold-header-icon-btn" title="Generate Letter" aria-label="Generate Letter">📄</button>
+            <button id="holdKycBtn" class="hold-header-icon-btn" title="KYC Details" aria-label="KYC Details">🪪</button>
+            <button id="closeHoldModal" class="hold-modal-close" aria-label="Close">×</button>
+          </div>
         </div>
         <div class="hold-modal-body">
           <p id="holdStatusText" style="margin-top:0; color:#050505;">Loading...</p>
@@ -823,6 +885,22 @@
         if (typeof openHoldPopup === 'function') {
           openHoldPopup();
         }
+      };
+    }
+
+    // Hold modal header icons (letter generation / KYC details)
+    const holdLetterBtn = document.getElementById("holdLetterBtn");
+    if (holdLetterBtn) {
+      holdLetterBtn.onclick = () => {
+        showIconName("Letter Generation");
+        // TODO: Add letter generation logic if required
+      };
+    }
+    const holdKycBtn = document.getElementById("holdKycBtn");
+    if (holdKycBtn) {
+      holdKycBtn.onclick = () => {
+        showIconName("KYC Details");
+        // TODO: Add KYC details logic if required
       };
     }
 

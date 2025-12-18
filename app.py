@@ -132,6 +132,9 @@ def ensure_transaction_columns():
         'put_on_hold_txn_id': 'VARCHAR(100)',
         'put_on_hold_date': 'VARCHAR(100)',
         'put_on_hold_amount': 'FLOAT',
+        'court_order_date': 'VARCHAR(20)',
+        'refund_status': 'VARCHAR(50)',
+        'refund_amount': 'FLOAT',
         'kyc_name': 'VARCHAR(120)',
         'kyc_aadhar': 'VARCHAR(20)',
         'kyc_mobile': 'VARCHAR(20)',
@@ -480,6 +483,7 @@ def graph_data(ack_no):
 
         def build_hierarchy(rows):
             root = {'name': 'Flow', 'children': []}
+
             def find_node(n, target):
                 if n['name'] == target:
                     return n
@@ -510,7 +514,6 @@ def graph_data(ack_no):
                     existing = next((c for c in parent['children'] if c['name'] == t.to_account), None)
                     if not existing:
                         # ✅ calculate total amount of all transactions between parent → child
-
                         child = {
                             'name': t.to_account,
                             'children': [],
@@ -520,9 +523,7 @@ def graph_data(ack_no):
                             'ifsc': t.ifsc_code,
                             'date': t.txn_date,
                             'txid': t.txn_id,
-
                             'amt': str(t.amount),
-
                             'disputed': str(t.disputed_amount),
                             'action': t.action_taken,
                             'state': t.state if t.state and t.state != 'Unknown' else (t.ifsc_code or 'Unknown State'),
@@ -541,18 +542,21 @@ def graph_data(ack_no):
                             'hold_info': {
                                 'txn_id': t.put_on_hold_txn_id,
                                 'amount': t.put_on_hold_amount,
-                                'date': t.put_on_hold_date
+                                'date': t.put_on_hold_date,
+                                'court_order_date': t.court_order_date,
+                                'refund_status': t.refund_status,
+                                'refund_amount': t.refund_amount,
                             } if t.put_on_hold_txn_id else None,
                             'kyc_name': t.kyc_name,
                             'kyc_aadhar': t.kyc_aadhar,
                             'kyc_mobile': t.kyc_mobile,
                             'kyc_address': t.kyc_address,
-
                             # ✅ Keep all individual transactions for popup
                             'transactions_from_parent': from_to_map[t.from_account][t.to_account]
                         }
                         parent['children'].append(child)
- pr            return root
+
+            return root
 
         result = build_hierarchy(transactions)
         print(f"Built hierarchy with {len(result['children'])} root children")
@@ -785,6 +789,41 @@ def save_kyc():
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "message": "Transaction not found"})
 
+
+@app.route('/save_hold_refund', methods=['POST'])
+def save_hold_refund():
+    """Save court order / refund details for a put-on-hold transaction."""
+    if session.get('role') in VIEW_ONLY_ROLES:
+        return jsonify({"status": "error", "message": "View-only users cannot edit refund details"}), 403
+
+    data = request.get_json() or {}
+    ack_no = (data.get('ack_no') or '').strip()
+    hold_txn_id = (data.get('hold_txn_id') or '').strip()
+
+    if not ack_no or not hold_txn_id:
+        return jsonify({"status": "error", "message": "Missing required identifiers"}), 400
+
+    txn = Transaction.query.filter_by(
+        ack_no=ack_no,
+        put_on_hold_txn_id=hold_txn_id
+    ).first()
+
+    if not txn:
+        return jsonify({"status": "error", "message": "Put-on-hold transaction not found"}), 404
+
+    txn.court_order_date = (data.get('court_order_date') or '').strip() or None
+    txn.refund_status = (data.get('refund_status') or '').strip() or None
+
+    refund_amount_raw = data.get('refund_amount')
+    try:
+        txn.refund_amount = float(refund_amount_raw) if refund_amount_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "Invalid refund amount"}), 400
+
+    db.session.commit()
+
+    return jsonify({"status": "success"})
+
 @app.route('/view_all_complaints')
 def view_all_complaints():
     complaints = UploadedFile.query.order_by(UploadedFile.upload_time.desc()).all()
@@ -815,7 +854,18 @@ def view_all_complaints():
         c.ack_nos = sorted(list(ack_set)) if ack_set else []
         print(f"File: {c.filename}, ID: {c.id}, ACK numbers: {c.ack_nos}")
 
-    return render_template("view_all_complaints.html", complaint_data=complaints)
+    # Deduplicate by ACK number (keep the latest upload per ACK based on ordering)
+    seen_acks = set()
+    unique_complaints = []
+    for c in complaints:
+        ack_value = c.ack_nos[0] if c.ack_nos else None
+        if ack_value and ack_value in seen_acks:
+            continue
+        if ack_value:
+            seen_acks.add(ack_value)
+        unique_complaints.append(c)
+
+    return render_template("view_all_complaints.html", complaint_data=unique_complaints)
 
 
 @app.route('/view_officers')

@@ -37,6 +37,11 @@ class Transaction(db.Model):
     put_on_hold_date = db.Column(db.String(100))
     put_on_hold_amount = db.Column(db.Float)
 
+    # Court / refund details for put-on-hold transactions
+    court_order_date = db.Column(db.String(20))
+    refund_status = db.Column(db.String(50))
+    refund_amount = db.Column(db.Float)
+
 # Add to Transaction model in models.py or wherever your SQLAlchemy models are defined
     kyc_name = db.Column(db.String(120))
     kyc_aadhar = db.Column(db.String(20))

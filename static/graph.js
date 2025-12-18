@@ -870,9 +870,12 @@ function drawTree(root) {
           // Court/Refund fields styled similarly to the right-side modal; hidden until icon click
           html += `<div id="${formSectionId}" style="display:none; margin-top:12px; padding:10px 0; border-top:1px solid #e5e7eb;">`;
           html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Court Order Date:</label><input id="holdCourtDate" type="date" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
-          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Status of Refund:</label><select id="holdRefundStatus" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"><option value="refunded">Refunded</option><option value="partially_refunded">Partially Refunded</option><option value="not_refunded">Not Refunded</option></select></div>`;
-          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Amount Refund:</label><input id="holdRefundAmount" type="number" step="0.01" placeholder="₹" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
-          html += `<button id="saveHoldExtraBtn" style="background:#2563eb; color:white; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600; width:100%;">Save</button>`;
+          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Status of Refund:</label><select id="holdRefundStatus" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"><option value="Refunded">Refunded</option><option value="Partially Refunded">Partially Refunded</option><option value="Not Refunded">Not Refunded</option></select></div>`;
+          html += `<div style="margin-bottom:8px;"><label style="font-weight:600; display:block; margin-bottom:4px;">Amount Refund:</label><input id="holdRefundAmount" type="text" inputmode="decimal" placeholder="₹" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px;"></div>`;
+          html += `<div style="display:flex; gap:8px; margin-top:4px;">`;
+          html += `<button id="editHoldExtraBtn" type="button" style="flex:1; background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600;">Edit</button>`;
+          html += `<button id="saveHoldExtraBtn" style="flex:1; background:#2563eb; color:white; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600;">Save</button>`;
+          html += `</div>`;
           html += `</div>`;
           // Add PDF button
           html += `<br><button id="downloadHoldGraphPdfBtn" style="background:#10b981; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">🖨️ Download Fundtrail</button>`;
@@ -885,11 +888,58 @@ function drawTree(root) {
           const statusSelect = document.getElementById('holdRefundStatus');
           const amountInput = document.getElementById('holdRefundAmount');
           const saveHoldBtn = document.getElementById('saveHoldExtraBtn');
+          const editHoldBtn = document.getElementById('editHoldExtraBtn');
 
-          // Viewer: disable hold form inputs and hide save button
+          const holdInfo = d.data.hold_info || {};
+
+          // Prefill existing values if already saved
+          if (courtInput && holdInfo.court_order_date) {
+            courtInput.value = holdInfo.court_order_date;
+          }
+          if (statusSelect && holdInfo.refund_status) {
+            statusSelect.value = holdInfo.refund_status;
+          }
+          if (amountInput && holdInfo.refund_amount != null) {
+            const amtNum = Number(holdInfo.refund_amount) || 0;
+            amountInput.dataset.rawValue = String(amtNum);
+            amountInput.value = amtNum.toLocaleString('en-IN');
+          }
+
+          // Format amount with commas as user types (Indian locale)
+          function attachAmountFormatter(inputEl) {
+            if (!inputEl) return;
+            inputEl.addEventListener('input', () => {
+              const cleaned = inputEl.value.replace(/[^\d.]/g, '').replace(/,/g, '');
+              if (!cleaned) {
+                inputEl.dataset.rawValue = '';
+                inputEl.value = '';
+                return;
+              }
+              const num = Number(cleaned);
+              if (!Number.isFinite(num)) {
+                return;
+              }
+              inputEl.dataset.rawValue = String(num);
+              inputEl.value = num.toLocaleString('en-IN');
+            });
+          }
+
+          attachAmountFormatter(amountInput);
+
+          // Viewer: disable hold form inputs and hide save/edit buttons
           if (isViewer) {
             [courtInput, statusSelect, amountInput].forEach(el => { if (el) el.disabled = true; });
             if (saveHoldBtn) saveHoldBtn.style.display = 'none';
+            if (editHoldBtn) editHoldBtn.style.display = 'none';
+          }
+
+          // Edit button: allow enabling the input boxes when not a viewer
+          if (editHoldBtn && !isViewer) {
+            editHoldBtn.onclick = () => {
+              [courtInput, statusSelect, amountInput].forEach(el => {
+                if (el) el.disabled = false;
+              });
+            };
           }
 
           if (toggleBtn && formSection) {
@@ -897,6 +947,49 @@ function drawTree(root) {
               const isHidden = formSection.style.display === 'none' || formSection.style.display === '';
               formSection.style.display = isHidden ? 'block' : 'none';
               toggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+            };
+          }
+
+          // Save court / refund details
+          if (saveHoldBtn && !isViewer) {
+            saveHoldBtn.onclick = () => {
+              const rawAmt = amountInput ? (amountInput.dataset.rawValue || amountInput.value.replace(/,/g, '').replace(/[^\d.]/g, '')) : '';
+              const amtVal = rawAmt ? Number(rawAmt) : null;
+
+              const payload = {
+                ack_no: ackNo,
+                hold_txn_id: holdInfo.txn_id,
+                court_order_date: courtInput ? courtInput.value : null,
+                refund_status: statusSelect ? statusSelect.value : null,
+                refund_amount: amtVal,
+              };
+
+              fetch('/save_hold_refund', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              })
+                .then(res => res.json().then(data => ({ ok: res.ok, data })))
+                .then(({ ok, data }) => {
+                  if (!ok || data.status !== 'success') {
+                    alert(data.message || 'Failed to save refund details.');
+                    return;
+                  }
+
+                  // Update in-memory data so it reflects without reload
+                  d.data.hold_info.court_order_date = payload.court_order_date;
+                  d.data.hold_info.refund_status = payload.refund_status;
+                  d.data.hold_info.refund_amount = payload.refund_amount;
+
+                  [courtInput, statusSelect, amountInput].forEach(el => {
+                    if (el) el.disabled = true;
+                  });
+
+                  alert('Refund details saved successfully.');
+                })
+                .catch(() => {
+                  alert('Failed to save refund details.');
+                });
             };
           }
 
@@ -1027,6 +1120,7 @@ function drawTree(root) {
         const kycMobile = document.getElementById('kycMobile');
         const kycAddress = document.getElementById('kycAddress');
         const saveKycBtn = document.getElementById('saveKycBtn');
+        const editKycBtn = document.getElementById('editKycBtn');
         const kycForm = document.getElementById('kycForm');
         
         // Hide KYC section by default when new transaction is selected
@@ -1034,15 +1128,6 @@ function drawTree(root) {
           kycSection.style.display = "none";
         }
         
-        // If viewer, disable KYC editing entirely
-        if (isViewer) {
-          ['kycName', 'kycAadhar', 'kycMobile', 'kycAddress'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.disabled = true;
-          });
-          if (saveKycBtn) saveKycBtn.style.display = "none";
-        }
-
         // Update form values with current transaction data
         if (kycTxnId) kycTxnId.value = d.data.txid || '';
         if (kycName) kycName.value = d.data.kyc_name || '';
@@ -1050,20 +1135,41 @@ function drawTree(root) {
         if (kycMobile) kycMobile.value = d.data.kyc_mobile || '';
         if (kycAddress) kycAddress.value = d.data.kyc_address || '';
         
-        // Check if KYC is already saved
-        let isKycSaved = d.data.kyc_name !== null && d.data.kyc_name !== "";
-        if (isKycSaved || isViewer) {
+        // Function to disable KYC inputs
+        const disableKycInputs = () => {
           ['kycName', 'kycAadhar', 'kycMobile', 'kycAddress'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = true;
           });
           if (saveKycBtn) saveKycBtn.style.display = "none";
-        } else {
+          if (editKycBtn && !isViewer) editKycBtn.style.display = "block";
+        };
+        
+        // Function to enable KYC inputs
+        const enableKycInputs = () => {
           ['kycName', 'kycAadhar', 'kycMobile', 'kycAddress'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = false;
           });
           if (saveKycBtn) saveKycBtn.style.display = "block";
+          if (editKycBtn) editKycBtn.style.display = "none";
+        };
+        
+        // If viewer, disable KYC editing entirely
+        if (isViewer) {
+          disableKycInputs();
+          if (editKycBtn) editKycBtn.style.display = "none";
+        } else {
+          // Always disable inputs by default (Edit button will enable them)
+          disableKycInputs();
+          
+          // Add Edit button click handler
+          if (editKycBtn) {
+            editKycBtn.onclick = null; // Remove old handler
+            editKycBtn.onclick = () => {
+              enableKycInputs();
+            };
+          }
         }
         
         // Remove existing form submit listener if any, then add new one
@@ -1094,12 +1200,15 @@ function drawTree(root) {
                   d.data.kyc_aadhar = aadhar;
                   d.data.kyc_mobile = mobile;
                   d.data.kyc_address = address;
+                  // Disable inputs after saving and show Edit button
                   ['kycName', 'kycAadhar', 'kycMobile', 'kycAddress'].forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.disabled = true;
                   });
-                  const btn = document.getElementById('saveKycBtn');
-                  if (btn) btn.style.display = "none";
+                  const saveBtn = document.getElementById('saveKycBtn');
+                  const editBtn = document.getElementById('editKycBtn');
+                  if (saveBtn) saveBtn.style.display = "none";
+                  if (editBtn && !isViewer) editBtn.style.display = "block";
                 } else {
                   alert("Error saving KYC: " + data.message);
                 }
